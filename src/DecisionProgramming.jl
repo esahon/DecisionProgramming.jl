@@ -44,7 +44,9 @@ export DecisionVariables,
     PathCompatibilityVariables,
     lazy_probability_cut,
     expected_value,
-    conditional_value_at_risk
+    conditional_value_at_risk,
+    cluster_variables_and_constraints,
+    ID_to_RJT
 
 export random_diagram!,
     random_probabilities!,

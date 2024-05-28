@@ -8,11 +8,11 @@ function decision_variable(model::Model, S::States, d::Node, I_d::Vector{Node}, 
     dims = S[[I_d; d]]
     println(dims)
     z_d = Array{VariableRef}(undef, dims...)
-    println(z_d)
+    println("z_d: $z_d")
     for s in paths(dims)
         z_d[s...] = @variable(model, binary=true, base_name=base_name)
     end
-    println(z_d)
+    println("z_d: $z_d")
     # Constraints to one decision per decision strategy.
     for s_I in paths(S[I_d])
         println(s_I)
@@ -388,7 +388,7 @@ end
 # Using the influence diagram and decision variables z from DecisionProgramming.jl,  
 # adds the variables and constraints of the corresponding RJT model
 function cluster_variables_and_constraints(model, diagram, z)
-
+    println("testi99")
     # I would prefer that we made some minor modifications to the diagram structure, 
     # having these as dictionaries makes things a lot easier in the model formulation
     # Muiden kuin value nodejen statet dictionaryyn
@@ -514,7 +514,7 @@ function cluster_variables_and_constraints(model, diagram, z)
         end
     end
 
-    println("erkki")
+    println("testi6")
     println("μ_breve: $μ_breve")
     println("")
     println(diagram.Names)

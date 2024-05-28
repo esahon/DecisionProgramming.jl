@@ -874,7 +874,6 @@ generate_arcs!(diagram)
 ```
 """
 function generate_arcs!(diagram::InfluenceDiagram)
-
     # Chance and decision nodes
     C_and_D = filter(x -> !isa(x, ValueNode), diagram.Nodes)
     n_CD = length(C_and_D)

@@ -1,7 +1,9 @@
 using Logging
 using JuMP, HiGHS
+using Revise
 using DecisionProgramming
 
+#include("DecisionProgramming.jl")
 
 
 const N = 4
@@ -57,6 +59,7 @@ generate_diagram!(diagram);
 
 
 
+
 model = Model()
 # set_silent(model)
 optimizer = optimizer_with_attributes(
@@ -88,3 +91,7 @@ print_decision_strategy(diagram, Z, S_probabilities)
 print_utility_distribution(U_distribution)
 
 print_statistics(U_distribution)
+
+
+
+
