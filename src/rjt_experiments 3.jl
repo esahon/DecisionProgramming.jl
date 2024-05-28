@@ -21,6 +21,7 @@ for i in 1:N-1
     # Health of next period
     add_node!(diagram, ChanceNode("H$(i+1)", ["H$(i)", "D$(i)"], ["ill", "healthy"]))
 end
+
 add_node!(diagram, ValueNode("MP", ["H$N"]))
 
 generate_arcs!(diagram);

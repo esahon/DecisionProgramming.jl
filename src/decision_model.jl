@@ -45,14 +45,10 @@ z = DecisionVariables(model, diagram)
 ```
 """
 function DecisionVariables(model::Model, diagram::InfluenceDiagram; names::Bool=false, name::String="z")
-    println(diagram.D)
-    println(diagram.I_j[diagram.D])
-    println(diagram.S)
-    println(diagram.States)
-    #println(diagram.d)
-    #println(I_d)
-    println(zip(diagram.D, diagram.I_j[diagram.D]))
-    DecisionVariables(diagram.D, diagram.I_j[diagram.D], [decision_variable(model, diagram.S, d, I_d, (names ? "$(name)_$(d.j)$(s)" : "")) for (d, I_d) in zip(diagram.D, diagram.I_j[diagram.D])])
+    DecisionVariables(collect(keys(diagram.D)), 
+                      values(diagram.I_j[collect(keys(diagram.D))]), 
+                      [decision_variable(model, diagram.S, diagram.D[d], diagram.I_j[d], (names ? "$(name)_$(d.j)$(s)" : "")) for d in keys(diagram.D)]
+    )
 end
 
 function is_forbidden(s::Path, forbidden_paths::Vector{ForbiddenPath})
@@ -146,36 +142,28 @@ function PathCompatibilityVariables(model::Model,
     if probability_scale_factor ≤ 0
         throw(DomainError("The probability_scale_factor must be greater than 0."))
     end
-
-    if !isempty(forbidden_paths)
-        @warn("Forbidden paths is still an experimental feature.")
+    if !(0 < α ≤ 1)
+        throw(DomainError("α should be 0 < α ≤ 1"))
     end
 
     # Create path compatibility variable for each effective path.
     N = length(diagram.S)
-    println("N: $N")
+
     variables_x_s = Dict{Path{N}, VariableRef}(
         s => path_compatibility_variable(model, (names ? "$(name)$(s)" : ""))
-        for s in paths(diagram.S, fixed)
-        if !iszero(diagram.P(s)) && !is_forbidden(s, forbidden_paths)
+        for s in paths(values(diagram.S), fixed)
+        if !iszero(diagram.P[s]) && !is_forbidden(s, forbidden_paths)
     )
 
     x_s = PathCompatibilityVariables{N}(variables_x_s)
-    println("x_s: $x_s")
 
     # Add decision strategy constraints for each decision node
-    #println("nakki")
-    #println(z)
-    #println(z_d)
-    #println(z.D)
-    #println(z.z)
-    for (d, z_d) in zip(z.D, z.z)
-        #println(z_d)
-        decision_strategy_constraint(model, diagram.S, d, diagram.I_j[d], z.D, z_d, x_s)
+    for d in keys(z.D)
+        decision_strategy_constraint(model, diagram.S, d, diagram.I_j[d], z.D, z.z[d], x_s)
     end
 
     if probability_cut
-        @constraint(model, sum(x * diagram.P(s) * probability_scale_factor for (s, x) in x_s) == 1.0 * probability_scale_factor)
+        @constraint(model, sum(x * diagram.P[s] * probability_scale_factor for (s, x) in x_s) == 1.0 * probability_scale_factor)
     end
 
     x_s
