@@ -564,6 +564,7 @@ function add_node!(diagram::InfluenceDiagram, node::AbstractNode)
         validate_node(diagram, node.name, node.I_j, value_node = true)
     end
     diagram.Nodes[node.name] = node
+    """
     println(node.name)
     println(node)
     println(diagram.C)
@@ -574,7 +575,7 @@ function add_node!(diagram::InfluenceDiagram, node::AbstractNode)
     elseif isa(node, ValueNode)
         diagram.V[node.name] = node
     end
-    
+    """
 end
 
 
@@ -694,10 +695,19 @@ function add_probabilities!(diagram::InfluenceDiagram, node::Name, probabilities
 
     if size(probabilities) == Tuple([diagram.S[j] for j in [diagram.I_j[node]..., node]])
         if isa(probabilities, ProbabilityMatrix)
-            # Check that probabilities sum to one happes in Probabilities
+            println("1")
+            # Check that probabilities sum to one happens in Probabilities
             diagram.X[node] = probabilities.matrix
         else
-            diagram.X[node] = probabilities
+            println("2")
+            println(diagram.X)
+            #println(diagram.X[node])
+            println(probabilities)
+            println(typeof(probabilities))
+            probabilities_array = Array{Float64}(probabilities)
+            println(probabilities_array)
+            println(typeof(probabilities_array))
+            diagram.X[node] = Probabilities(node)
         end
     else
         cardinalities = Tuple([diagram.S[n] for n in [diagram.I_j[node]..., node]])
@@ -851,34 +861,26 @@ end
 
 # --- Generating Arcs ---
 
-function validate_structure(Nodes::Vector{AbstractNode}, C_and_D::Vector{AbstractNode}, n_CD::Int, V::Vector{AbstractNode}, n_V::Int)
-    # Validating node structure
-    C_and_D = [node for node in values(diagram.C)] # Collects ChanceNode structures
-    append!(C_and_D, [node for node in values(diagram.D)]) # Appends DecisionNode structures
-    V = values(diagram.V) # Collects all ValueNodes
-
-    n_CD = length(C_and_D)
-    n_V = length(V)
-
+function validate_structure(Nodes::Dict{String, AbstractNode}, C_and_D::Dict{String, AbstractNode}, n_CD::Int, V::Dict{String, AbstractNode}, n_V::Int)
     # Validating node structure
     if n_CD == 0
         throw(DomainError("The influence diagram must have at least one chance or decision node."))
     end
-    if !(union((n.I_j for n in values(diagram.Nodes))...) ⊆ keys(diagram.Nodes))
+    if !(union((n.I_j for n in values(Nodes))...) ⊆ keys(Nodes))
         throw(DomainError("Each node that is part of an information set should be added as a node."))
     end
     # Checking the information sets of C and D nodes
-    if !isempty(union((j.I_j for j in C_and_D)...) ∩ keys(diagram.V))
+    if !isempty(union((j.I_j for j in values(C_and_D))...) ∩ keys(V))
         throw(DomainError("Information sets should not include any value nodes."))
     end
     # Checking the information sets of V nodes
-    if !isempty(V) && !isempty(union((v.I_j for v in V)...) ∩ keys(diagram.V))
+    if !isempty(V) && !isempty(union((v.I_j for v in values(V))...) ∩ keys(V))
         throw(DomainError("Information sets should not include the node itself."))
     end
     # Check for redundant chance or decision nodes.
-    last_CD_nodes = setdiff(keys(C_and_D), union((j.I_j for j in C_and_D)...))
+    last_CD_nodes = setdiff(keys(C_and_D), union((j.I_j for j in values(C_and_D))...))
     for i in last_CD_nodes
-        if !isempty(V) && i ∉ union((v.I_j for v in V)...)
+        if !isempty(V) && i ∉ union((v.I_j for v in values(V))...)
             @warn("Node $i is redundant.")
         end
     end
@@ -898,24 +900,48 @@ generate_arcs!(diagram)
 ```
 """
 function generate_arcs!(diagram::InfluenceDiagram)
-    println("testi3")
-    #println(diagram.C)
-    #println(diagram.D)
-    C_and_D = values(union(diagram.C, diagram.D)) # Collects all Chance and Decision nodes
+    #CHECK THIS FOR IMPROVEMENTS
+    C_and_D = filter(x -> !isa(x[2], ValueNode), pairs(diagram.Nodes)) # Collects all nodes not ValueNodes
+    #println(diagram.Nodes)
+    #println("")
+    #println(C_and_D)
+    #println("")
     n_CD = length(C_and_D)
-    V_nodes = values(diagram.V) # Collects all ValueNodes
+    V_nodes = filter(x -> isa(x[2], ValueNode), pairs(diagram.Nodes)) # Collects all ValueNodes
     n_V = length(V_nodes)
 
-    Names = keys(diagram.Nodes)
-    I_j = values(diagram.I_j)
-
-    validate_structure(diagram)
+    validate_structure(diagram.Nodes, C_and_D, n_CD, V_nodes, n_V)
 
     # Declare vectors for results (final resting place InfluenceDiagram.Names and InfluenceDiagram.I_j)
-    states = values(diagram.States)
-    S = Dict(map(k -> k => length(v), diagram.States))
+    Names = collect(keys(diagram.Nodes)) 
+    I_j = Dict{Name, Vector{Name}}()
+    states = Dict{Name, Vector{Name}}()
+    S = Dict{Name, State}()
+    C = Dict{Name, ChanceNode}()
+    D = Dict{Name, DecisionNode}()
+    V = Dict{Name, ValueNode}()
+
+    for key in keys(C_and_D)
+        I_j[key] = C_and_D[key].I_j
+        states[key] = C_and_D[key].states
+        S[key] = length(states[key])
+    end
+
+    C = filter(x -> isa(x[2], ChanceNode), pairs(diagram.Nodes))
+    D = filter(x -> isa(x[2], DecisionNode), pairs(diagram.Nodes))
+    V = filter(x -> isa(x[2], ValueNode), pairs(diagram.Nodes))
+    println(C)
 
     diagram.Names = Names
+    diagram.I_j = I_j
+    diagram.States = states
+    diagram.S = S
+    diagram.C = C
+    diagram.D = D
+    diagram.V = V
+    # Declaring X and Y
+    diagram.X = Dict{Name, Probabilities}()
+    diagram.Y = Dict{Name, Utilities}()
 end
 
 
