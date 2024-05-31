@@ -313,6 +313,11 @@ struct DefaultPathProbability <: AbstractPathProbability
 end
 
 function (P::DefaultPathProbability)(s::Path)
+    #println("testi00")
+    #println(P.C)
+    #println(P.I_c)
+    #println(P.X)
+    #println(prod(X(s[[I_c; c]]) for (c, I_c, X) in zip(P.C, P.I_c, P.X)))
     prod(X(s[[I_c; c]]) for (c, I_c, X) in zip(P.C, P.I_c, P.X))
 end
 
@@ -564,18 +569,13 @@ function add_node!(diagram::InfluenceDiagram, node::AbstractNode)
         validate_node(diagram, node.name, node.I_j, value_node = true)
     end
     diagram.Nodes[node.name] = node
-    """
-    println(node.name)
-    println(node)
-    println(diagram.C)
-    if isa(node, ChanceNode)
-        diagram.C[node.name] = node
-    elseif isa(node, DecisionNode)
-        diagram.D[node.name] = node
-    elseif isa(node, ValueNode)
-        diagram.V[node.name] = node
+
+    #IS THERE A BETTER WAY OF FILLING NAMES, I DIDN'T FIND A GOOD WAY TO DEFINE NAMES-VARIABLE IN THE CONSTRUCTOR
+    if isdefined(diagram, :Names)
+        push!(diagram.Names, node.name)
+    else
+        diagram.Names = [node.name]
     end
-    """
 end
 
 
@@ -695,19 +695,12 @@ function add_probabilities!(diagram::InfluenceDiagram, node::Name, probabilities
 
     if size(probabilities) == Tuple([diagram.S[j] for j in [diagram.I_j[node]..., node]])
         if isa(probabilities, ProbabilityMatrix)
-            println("1")
+            #println("1")
             # Check that probabilities sum to one happens in Probabilities
-            diagram.X[node] = probabilities.matrix
+            diagram.X[node] = Probabilities(Node(index_of(diagram, node)), probabilities.matrix)
         else
-            println("2")
-            println(diagram.X)
-            #println(diagram.X[node])
-            println(probabilities)
-            println(typeof(probabilities))
-            probabilities_array = Array{Float64}(probabilities)
-            println(probabilities_array)
-            println(typeof(probabilities_array))
-            diagram.X[node] = Probabilities(node)
+            #println("2")
+            diagram.X[node] = Probabilities(Node(index_of(diagram, node)), probabilities)
         end
     else
         cardinalities = Tuple([diagram.S[n] for n in [diagram.I_j[node]..., node]])
@@ -844,13 +837,15 @@ function add_utilities!(diagram::InfluenceDiagram, node::Name, utilities::Abstra
     if any(u ==Inf for u in utilities)
         throw(DomainError("Utility values should be less than infinity."))
     end
-
+    println(size(utilities))
+    println(diagram.I_j)
     if size(utilities) == Tuple([diagram.S[j] for j in diagram.I_j[node]])
         if isa(utilities, UtilityMatrix)
-            diagram.Y[node] = utilities.matrix
+            diagram.Y[node] = Utilities(Node(index_of(diagram, node)), utilities.matrix)
         else
             # Conversion to Float32 using Utility(), since machine default is Float64
-            diagram.Y[node] = [Utility(u) for u in utilities]
+            diagram.Y[node] = Utilities(Node(index_of(diagram, node)), [Utility(u) for u in utilities])
+            #Probabilities(Node(index_of(diagram, node)), probabilities)
         end
     else
         cardinalities = Tuple([diagram.S[n] for n in diagram.I_j[node]])
@@ -900,12 +895,8 @@ generate_arcs!(diagram)
 ```
 """
 function generate_arcs!(diagram::InfluenceDiagram)
-    #CHECK THIS FOR IMPROVEMENTS
+    #ROUGHLY SAME AS BEFORE
     C_and_D = filter(x -> !isa(x[2], ValueNode), pairs(diagram.Nodes)) # Collects all nodes not ValueNodes
-    #println(diagram.Nodes)
-    #println("")
-    #println(C_and_D)
-    #println("")
     n_CD = length(C_and_D)
     V_nodes = filter(x -> isa(x[2], ValueNode), pairs(diagram.Nodes)) # Collects all ValueNodes
     n_V = length(V_nodes)
@@ -913,7 +904,7 @@ function generate_arcs!(diagram::InfluenceDiagram)
     validate_structure(diagram.Nodes, C_and_D, n_CD, V_nodes, n_V)
 
     # Declare vectors for results (final resting place InfluenceDiagram.Names and InfluenceDiagram.I_j)
-    Names = collect(keys(diagram.Nodes)) 
+    # NAMES ALREADY DECLARED
     I_j = Dict{Name, Vector{Name}}()
     states = Dict{Name, Vector{Name}}()
     S = Dict{Name, State}()
@@ -921,8 +912,11 @@ function generate_arcs!(diagram::InfluenceDiagram)
     D = Dict{Name, DecisionNode}()
     V = Dict{Name, ValueNode}()
 
+    for key in keys(diagram.Nodes)
+        I_j[key] = diagram.Nodes[key].I_j
+    end
+
     for key in keys(C_and_D)
-        I_j[key] = C_and_D[key].I_j
         states[key] = C_and_D[key].states
         S[key] = length(states[key])
     end
@@ -930,10 +924,45 @@ function generate_arcs!(diagram::InfluenceDiagram)
     C = filter(x -> isa(x[2], ChanceNode), pairs(diagram.Nodes))
     D = filter(x -> isa(x[2], DecisionNode), pairs(diagram.Nodes))
     V = filter(x -> isa(x[2], ValueNode), pairs(diagram.Nodes))
-    println(C)
+    #println(I_j)
+    """
+    println("Names")
+    println(diagram.Names)
+    for node in diagram.Names
+        if isa(diagram.Nodes[node], ValueNode)
+            index = findfirst(diagram.Names, node)
+            splice!(diagram.Names, index, 1)
+            push!(diagram.Names, node)
+        end
+    end
+    
+    println(diagram.Names)
+    new_names = String[]  # Create a new empty array
+    value_node = ""
+    for node in diagram.Names
+        if isa(diagram.Nodes[node], ValueNode)
+            value_node = node  # Store the value node
+        else
+            push!(new_names, node)  # Add non-ValueNode elements to the new array
+        end
+    end
+    
+    if value_node != ""
+        push!(new_names, value_node)  # Add the value node to the end of the new array
+        diagram.Names = new_names  # Update the diagram.Names with the new array
+    end
+    """
 
-    diagram.Names = Names
+    value_nodes = [node for node in diagram.Names if isa(diagram.Nodes[node], ValueNode)]
+    non_value_nodes = filter(x -> !isa(diagram.Nodes[x], ValueNode), diagram.Names)
+    diagram.Names = vcat(non_value_nodes, value_nodes)
+
+    println(diagram.Names)
+    #diagram.Names = Names
     diagram.I_j = I_j
+    println("I_j:")
+    println(I_j)
+    println(I_j["H1"])
     diagram.States = states
     diagram.S = S
     diagram.C = C
@@ -983,15 +1012,52 @@ function generate_diagram!(diagram::InfluenceDiagram;
     positive_path_utility::Bool=false,
     negative_path_utility::Bool=false)
 
-
+    println("testi95")
     # There's no need to sort X and Y dictionaries as dictionary order doesn't matter for your use case
 
     # Declare P and U if defaults are used
     if default_probability
-        diagram.P = DefaultPathProbability(values(diagram.C), values(diagram.I_j[collect(keys(diagram.C))]), values(diagram.X))
+        #TARKISTA MITEN VOI PARANTAA
+        C_keys = collect(keys(diagram.C))
+        index_values = [index_of(diagram, key) for key in C_keys]
+        sorted_permutation = sortperm(index_values)
+        C_keys = C_keys[sorted_permutation]
+        #C_keys = collect(keys(diagram.C))
+        C_I_j = fill(Vector{Name}(), length(C_keys))
+        for i in 1:length(C_keys)
+            C_I_j[i] = diagram.I_j[C_keys[i]]
+        end
+
+        # Apply the transformation to the vector of vectors
+        vector_of_ints = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), C_I_j)
+        println(vector_of_ints)
+
+        int_vector = map(s -> index_of(diagram, s), C_keys)
+
+        println(int_vector)
+
+        println("collect(values(diagram.X)):")
+        println(collect(values(diagram.X)))
+
+        X_keys = collect(keys(diagram.X))
+        index_values = [index_of(diagram, key) for key in X_keys]
+        sorted_permutation = sortperm(index_values)
+        X_values = collect(values(diagram.X))
+        X_values = X_values[sorted_permutation]
+
+        diagram.P = DefaultPathProbability(int_vector, vector_of_ints, X_values)
     end
+
     if default_utility
-        diagram.U = DefaultPathUtility(values(diagram.I_j[collect(keys(diagram.V))]), values(diagram.Y))
+        V_keys = collect(keys(diagram.V))
+        V_I_j = fill(Vector{Name}(), length(V_keys))
+        for i in 1:length(V_keys)
+            V_I_j[i] = diagram.I_j[V_keys[i]]
+        end
+        vector_of_ints2 = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), V_I_j)
+
+        diagram.U = DefaultPathUtility(vector_of_ints2, collect(values(diagram.Y)))
+        #diagram.U = DefaultPathUtility(values(diagram.I_j[collect(keys(diagram.V))]), collect(values(diagram.Y)))
         if positive_path_utility
             # Conversion to Float32 using Utility(), since machine default is Float64
             diagram.translation = 1 -  minimum(diagram.U(s) for s in paths(values(diagram.S)))
@@ -1001,7 +1067,6 @@ function generate_diagram!(diagram::InfluenceDiagram;
             diagram.translation = 0
         end
     end
-
 end
 
 """
@@ -1016,11 +1081,14 @@ julia> idx_O = index_of(diagram, "O")
 ```
 """
 function index_of(diagram::InfluenceDiagram, node::Name)
-    if !haskey(diagram.Nodes, node)
-        throw(DomainError("Node $node not found in the diagram."))
+    idx = findfirst(isequal(node), diagram.Names)
+    if isnothing(idx)
+        throw(DomainError("Name $node not found in the diagram."))
     end
-    return diagram.Nodes[node]
+    return idx
 end
+
+
 
 """
     function num_states(diagram::InfluenceDiagram, node::Name)

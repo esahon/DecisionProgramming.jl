@@ -3,14 +3,13 @@ using JuMP, HiGHS
 using Revise
 using DecisionProgramming
 
-#include("DecisionProgramming.jl")
-
 
 const N = 4
 
 diagram = InfluenceDiagram()
 
 add_node!(diagram, ChanceNode("H1", [], ["ill", "healthy"]))
+
 for i in 1:N-1
     # Testing result
     add_node!(diagram, ChanceNode("T$i", ["H$i"], ["positive", "negative"]))
@@ -69,24 +68,29 @@ optimizer = optimizer_with_attributes(
 )
 set_optimizer(model, optimizer)
 
+
 z = DecisionVariables(model, diagram)
+
 #print(z)
 μ = cluster_variables_and_constraints(model, diagram, z)
 
-model
+println("model:")
+println(model)
 
 
 optimize!(model)
 
-
+println("z: ")
+println(z)
 Z = DecisionStrategy(z)
+println("Z: ")
 println(Z)
 S_probabilities = StateProbabilities(diagram, Z)
 U_distribution = UtilityDistribution(diagram, Z);
 
-#println(diagram)
-#println(Z)
-#println(S_probabilities)
+println(diagram)
+println(Z)
+println(S_probabilities)
 print_decision_strategy(diagram, Z, S_probabilities)
 
 print_utility_distribution(U_distribution)

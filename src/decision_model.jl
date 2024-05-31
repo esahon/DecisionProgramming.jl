@@ -1,6 +1,7 @@
 using JuMP
 
-function decision_variable(model::Model, S::States, d::Node, I_d::Vector{Node}, base_name::String="")
+#ONKO S:N TYYPPI TÄSSÄ OIKEIN, SAAKO JOTENKIN STATES-TYYPIKSI?
+function decision_variable(model::Model, S::Vector{State}, d::Node, I_d::Vector{Node}, base_name::String="")
     # Create decision variables.
     println(d)
     println(I_d)
@@ -45,9 +46,27 @@ z = DecisionVariables(model, diagram)
 ```
 """
 function DecisionVariables(model::Model, diagram::InfluenceDiagram; names::Bool=false, name::String="z")
-    DecisionVariables(collect(keys(diagram.D)), 
-                      values(diagram.I_j[collect(keys(diagram.D))]), 
-                      [decision_variable(model, diagram.S, diagram.D[d], diagram.I_j[d], (names ? "$(name)_$(d.j)$(s)" : "")) for d in keys(diagram.D)]
+    D_keys = collect(keys(diagram.D))
+    index_values = [index_of(diagram, key) for key in D_keys]
+    sorted_permutation = sortperm(index_values)
+    D_keys = D_keys[sorted_permutation]
+    int_vector3 = map(s -> index_of(diagram, s), D_keys)
+    println("int_vector3:")
+    println(int_vector3)
+    int_vector3 = map(Int16, int_vector3)
+
+    D_I_j = fill(Vector{Name}(), length(D_keys))
+    for i in 1:length(D_keys)
+        D_I_j[i] = diagram.I_j[D_keys[i]]
+    end
+    vector_of_ints3 = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), D_I_j)
+
+    println("vector_of_ints3:")
+    println(vector_of_ints3)
+
+    DecisionVariables(int_vector3, 
+                      vector_of_ints3, 
+                      [decision_variable(model, collect(values(diagram.S)), d, I_d, (names ? "$(name)_$(d.j)$(s)" : "")) for (d, I_d) in zip(int_vector3, vector_of_ints3)]
     )
 end
 
@@ -339,15 +358,32 @@ end
 function ID_to_RJT(diagram)
     C_rjt = Dict{String, Vector{String}}()
     A_rjt = []
-    namelist = [node.name for node in diagram.Nodes]
+    #VAI VOISIKO KÄYTTÄÄ SUORAAN DIAGRAM.NAMES, VAIKUTTAAKO JÄRJESTYS?
+    println(collect(keys(diagram.Nodes)))
+    #namelist = [node.name for node in diagram.Nodes]
+    namelist = collect(keys(diagram.Nodes))
+    namelist = ["H1", "T1", "D1", "C1", "H2", "T2", "D2", "C2", "H3", "T3", "D3", "C3", "H4", "MP"]
+    println("namelist:")
+    println(namelist)
+    
     for j in length(diagram.Nodes):-1:1
-        C_j = copy(diagram.Nodes[j].I_j)
+        #println(diagram.Nodes)
+        #C_j = copy(diagram.Nodes[j].I_j)
+        #println(namelist[j])
+        
+        C_j = copy(diagram.Nodes[namelist[j]].I_j)
+        
+        #println(C_j)
         push!(C_j, namelist[j])
+        #println("IJ1")
+        #println(diagram.I_j["H1"])
         for a in A_rjt 
             if a[1] == namelist[j]
                 push!(C_j, setdiff(C_rjt[a[2]], [a[2]])...)
             end
         end
+        #println("IJ2")
+        #println(diagram.I_j["H1"])
         C_j = unique(C_j)
         C_j_aux = sort([(elem, findfirst(isequal(elem), namelist)) for elem in C_j], by = last)
         C_j = [C_j_tuple[1] for C_j_tuple in C_j_aux]
@@ -361,6 +397,7 @@ function ID_to_RJT(diagram)
     println(C_rjt)
     println(A_rjt)
     println("")
+    
     return C_rjt, A_rjt
 end
 
@@ -376,6 +413,8 @@ end
 # Using the influence diagram and decision variables z from DecisionProgramming.jl,  
 # adds the variables and constraints of the corresponding RJT model
 function cluster_variables_and_constraints(model, diagram, z)
+    
+    """
     println("testi99")
     # I would prefer that we made some minor modifications to the diagram structure, 
     # having these as dictionaries makes things a lot easier in the model formulation
@@ -389,8 +428,6 @@ function cluster_variables_and_constraints(model, diagram, z)
         end
     end    
     println(diagram.Nodes)
-    println("S: $S")
-    println("")
 
     I_j = Dict{String, Vector{String}}()
     for (idx, name) in enumerate(diagram.Names)
@@ -438,28 +475,30 @@ function cluster_variables_and_constraints(model, diagram, z)
     end
     println(Y)
     println("")
-
+"""
     z_dict = Dict{String, Array{VariableRef}}()
     idx = 1
     for name in diagram.Names
-        if isa(Nodes[name], DecisionNode)
+        if isa(diagram.Nodes[name], DecisionNode)
             z_dict[name] = z.z[idx]
             idx += 1
         end
     end
-    println("z_dict: $z_dict")
-    println("")
 
     # Get the RJT structure
     C_rjt, A_rjt = ID_to_RJT(diagram)
+    
+    println("C_rjt:")
+    println(C_rjt)
+    println(diagram.States)
 
     # Variables corresponding to the nodes in the RJT
     μ = Dict{String, Array{VariableRef}}()
     for j in keys(C_rjt)
-        if !isa(Nodes[j], ValueNode)
-            μ[j] = Array{VariableRef}(undef, Tuple(length.([getindex.(Ref(S), C_rjt[j])]...)))
+        println(j)
+        if !isa(diagram.Nodes[j], ValueNode)
+            μ[j] = Array{VariableRef}(undef, Tuple(length.([getindex.(Ref(diagram.States), C_rjt[j])]...)))
             for index in CartesianIndices(μ[j])
-
                 μ[j][index] = @variable(model, base_name="μ_$j($(join(Tuple(index),',')))", lower_bound=0)
                 #println(μ[j][index])
             end
@@ -471,9 +510,10 @@ function cluster_variables_and_constraints(model, diagram, z)
     #println(μ)
     println("testi")
     println("μ: $μ")
-
+    
     for a in A_rjt
-        if !isa(Nodes[a[2]], ValueNode)
+        println(a)
+        if !isa(diagram.Nodes[a[2]], ValueNode)
             intersection = C_rjt[a[1]] ∩ C_rjt[a[2]]
             println(intersection)
             C1_minus_C2 = Tuple(setdiff(collect(1:length(C_rjt[a[1]])), indexin(intersection, C_rjt[a[1]])))
@@ -490,8 +530,10 @@ function cluster_variables_and_constraints(model, diagram, z)
     # Variables μ_{\breve{C}_v} = ∑_{x_v} μ_{C_v}
     μ_breve = Dict{String, Array{VariableRef}}()
     for j in keys(C_rjt)
-        if !isa(Nodes[j], ValueNode)
-            μ_breve[j] = Array{VariableRef}(undef, Tuple(length.([getindex.(Ref(S), setdiff(C_rjt[j], [j]))]...)))
+        if !isa(diagram.Nodes[j], ValueNode)
+            println(diagram.S)
+            println(diagram.States)
+            μ_breve[j] = Array{VariableRef}(undef, Tuple(length.([getindex.(Ref(diagram.States), setdiff(C_rjt[j], [j]))]...)))
             println(μ_breve[j])
             for index in CartesianIndices(μ_breve[j])
                 # Moments μ_{\breve{C}_v} (the moments from above, but with the last variable dropped out)
@@ -506,28 +548,53 @@ function cluster_variables_and_constraints(model, diagram, z)
     println("μ_breve: $μ_breve")
     println("")
     println(diagram.Names)
-    println("")
-    println(I_j)
+    #println("")
+    #println(I_j)
+    println("diagram.X:")
+    println(diagram.X)
 
     # Add in the conditional probabilities and decision strategies
     for name in diagram.Names 
-        if !isa(Nodes[name], ValueNode) # In our structure, value nodes are not stochastic and the whole objective thing doesn't really work in this context
-            I_j_mapping = [findfirst(isequal(node), C_rjt[name]) for node in I_j[name]] # Map the information set to the variables in the cluster
-            #println(I_j_mapping)
+        println("name:")
+        println(name)
+        #println("diagram.X[name]:")
+        #println(diagram.X[name])
+        if !isa(diagram.Nodes[name], ValueNode) # In our structure, value nodes are not stochastic and the whole objective thing doesn't really work in this context
+            #println(node)
+            println(C_rjt[name])
+            println(diagram.I_j[name])
+            I_j_mapping = [findfirst(isequal(node), C_rjt[name]) for node in diagram.I_j[name]] # Map the information set to the variables in the cluster
+            #println(diagram.I_j[name])
+            println(I_j_mapping)
             for index in CartesianIndices(μ_breve[name])
-                println(μ_breve[name])
-                for s_j in 1:length(States[name])
-                    if isa(Nodes[name], ChanceNode)
+                #println(μ_breve[name])
+                #println(index)
+                for s_j in 1:length(diagram.States[name])
+                    #println(length(μ[name]))
+                    #println("testi")
+                    #println(length(diagram.States[name]))
+                    #println(I_j_mapping)
+                    #println([Tuple(index)[I_j_mapping]...,s_j])
+                    #println(diagram.X[name][Tuple(index)[I_j_mapping]...,s_j])
+                    if isa(diagram.Nodes[name], ChanceNode)
                         # μ_{C_v} = p*μ_{\breve{C}_v}
-                        @constraint(model, μ[name][Tuple(index)...,s_j] == X[name][Tuple(index)[I_j_mapping]...,s_j]*μ_breve[name][index])
+                        println(μ[name][Tuple(index)...,s_j])
+                        println(μ_breve[name][index])
+                        #println([Tuple(index)[I_j_mapping]...,s_j])
+                        println("testiprinttaus:")
+                        println(diagram.X[name])
+                        #println(index)
+                        println(I_j_mapping)
+                        #println(s_j)
+                        #println(diagram.X[name][Tuple(index)[I_j_mapping]...,s_j])
+                        @constraint(model, μ[name][Tuple(index)...,s_j] == diagram.X[name][Tuple(index)[I_j_mapping]...,s_j]*μ_breve[name][index])
                         #println(μ[name][Tuple(index)...,s_j])
-                        #println(X[name][Tuple(index)[I_j_mapping]...,s_j])
                         #println(μ_breve[name][index])
-                    elseif isa(Nodes[name], DecisionNode)
+                    elseif isa(diagram.Nodes[name], DecisionNode)
                         # μ_{C_v} ≤ z
                         @constraint(model, μ[name][Tuple(index)...,s_j] <= z_dict[name][Tuple(index)[I_j_mapping]...,s_j])
-                        println(μ[name][Tuple(index)...,s_j])
-                        println(z_dict[name][Tuple(index)[I_j_mapping]...,s_j])
+                        #println(μ[name][Tuple(index)...,s_j])
+                        #println(z_dict[name][Tuple(index)[I_j_mapping]...,s_j])
                     end
                 end
             end
@@ -538,14 +605,14 @@ function cluster_variables_and_constraints(model, diagram, z)
     # of a value node is always included in the previous cluster by construction
     @objective(model, Max, 0)
     for j in keys(C_rjt)
-        if isa(Nodes[j], ValueNode)
+        if isa(diagram.Nodes[j], ValueNode)
             i = A_rjt[findfirst(a -> a[2] == j, A_rjt)][1]
             #println("nakki")
             println(i)
-            I_j_mapping = [findfirst(isequal(node), C_rjt[i]) for node in I_j[j]]
+            I_j_mapping = [findfirst(isequal(node), C_rjt[i]) for node in diagram.I_j[j]]
             println(I_j_mapping)
             for index in CartesianIndices(μ[i])
-                set_objective_coefficient(model, μ[i][index], Y[j][Tuple(index)[I_j_mapping]...])
+                set_objective_coefficient(model, μ[i][index], diagram.Y[j][Tuple(index)[I_j_mapping]...])
             end
         end
     end

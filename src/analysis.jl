@@ -9,11 +9,13 @@
 CompatiblePaths type.
 """
 struct CompatiblePaths
-    S::States
+    #MUUTETTU TYPE states --> Vector{Int16}, voisi olla hyvä selvitä ilman muutosta
+    S::Vector{Int16}
     C::Vector{Node}
     Z::DecisionStrategy
     fixed::FixedPath
     function CompatiblePaths(S, C, Z, fixed)
+        println(C)
         if !all(k∈Set(C) for k in keys(fixed))
             throw(DomainError("You can only fix chance states."))
         end
@@ -38,10 +40,14 @@ end
 ```
 """
 function CompatiblePaths(diagram::InfluenceDiagram, Z::DecisionStrategy, fixed::FixedPath=Dict{Node, State}())
-    CompatiblePaths(diagram.S, diagram.C, Z, fixed)
+    #TÄLLE TARVITAAN FUNKTIO
+    int_vector4 = map(s -> index_of(diagram, s), collect(keys(diagram.C)))
+
+    CompatiblePaths(collect(values(diagram.S)), int_vector4, Z, fixed)
 end
 
-function compatible_path(S::States, C::Vector{Node}, Z::DecisionStrategy, s_C::Path)
+#MUUTETTU TYPE states --> Vector{Int16}, voisi olla hyvä selvitä ilman muutosta
+function compatible_path(S::Vector{Int16}, C::Vector{Node}, Z::DecisionStrategy, s_C::Path)
     s = Array{State}(undef, length(S))
     for (c, s_C_j) in zip(C, s_C)
         s[c] = s_C_j
@@ -216,8 +222,25 @@ StateProbabilities(diagram, Z)
 ```
 """
 function StateProbabilities(diagram::InfluenceDiagram, Z::DecisionStrategy)
-    probs = Dict(i => zeros(diagram.S[i]) for i in 1:length(diagram.S))
-    for s in CompatiblePaths(diagram, Z), i in 1:length(diagram.S)
+    println(diagram)
+    println(Z)
+
+    println("diagram.S:")
+    println(diagram.S)
+    println(collect(values(diagram.S)))
+
+    #S_values = collect(values(diagram.S))
+    #index_values = [index_of(diagram, key) for key in S_values]
+    #sorted_permutation = sortperm(index_values)
+    #S_values = S_values[sorted_permutation]
+
+    probs = Dict(i => zeros(collect(values(diagram.S))[i]) for i in 1:length(collect(values(diagram.S))))
+    for s in CompatiblePaths(diagram, Z), i in 1:length(collect(values(diagram.S)))
+        #println("s:")
+        #println(s)
+        #println(s[i])
+        #println("i:")
+        #println(i)
         probs[i][s[i]] += diagram.P(s)
     end
     StateProbabilities(probs, Dict{Node, State}())
