@@ -20,25 +20,32 @@ function randomStrategy(diagram::InfluenceDiagram)
     # Initialize empty vector for local decision strategies
     # Z_d = Vector{LocalDecisionStrategy}[] # Doesn't work for some reason...
     Z_d = []
+    I_j_keys = collect(keys(diagram.I_j))
+    I_j_keys_ordered, I_j_keys_ordered_and_indexed = order_and_index(diagram, I_j_keys)
+    I_j_ordered_and_indexed = order_and_index(diagram, I_j_keys_ordered, true)
+    S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
+    D_keys = collect(keys(diagram.D))
+    D_keys_ordered, D_keys_ordered_and_indexed = order_and_index(diagram, D_keys)
+    D_keys_ordered_and_indexed = map(Int16, D_keys_ordered_and_indexed)
 
     # Loop through all decision nodes and set local decision strategies
-    for j in diagram.D
-        I_j = diagram.I_j[j]
+    for j in D_keys_ordered_and_indexed
+        I_j = I_j_ordered_and_indexed[j]
 
         # Generate a matrix of correct dimensions to represent the strategy
-        dims = diagram.S[[I_j; j]]
+        dims = S_values_ordered[[I_j; j]]
         data = zeros(Int, Tuple(dims))
         n_states = size(data)[end]
 
         # For each information state, choose a random decision state 
-        for s_Ij in paths(diagram.S[I_j])
+        for s_Ij in paths(S_values_ordered[I_j])
             data[s_Ij..., rand(1:n_states)] = 1
         end
         push!(Z_d, LocalDecisionStrategy(j,data))
     end
 
     # Construct a decision strategy and obtain the compatible paths
-    Z = DecisionStrategy(diagram.D, diagram.I_j[diagram.D], Z_d)
+    Z = DecisionStrategy(D_keys_ordered_and_indexed, I_j_ordered_and_indexed[D_keys_ordered_and_indexed], Z_d)
     S_active = CompatiblePaths(diagram, Z)
 
     # Calculate the expected utility corresponding to the strategy
@@ -80,7 +87,10 @@ end
 
 
 function get_value(diagram, S_active, j, s_j, s_Ij, EU)
-    I_j = diagram.I_j[j] # Information set of node j
+    I_j_keys = collect(keys(diagram.I_j))
+    I_j_keys_ordered, I_j_keys_ordered_and_indexed = order_and_index(diagram, I_j_keys)
+    I_j_ordered_and_indexed = order_and_index(diagram, I_j_keys_ordered, true)
+    I_j = I_j_ordered_and_indexed[j] # Information set of node j
     # Loop through all compatible paths and update the ones that correspond to the given information state s_Ij
     # and update the expected utility whenever a path is updated
     S_active_new = copy(S_active)
@@ -99,8 +109,9 @@ function get_value(diagram, S_active, j, s_j, s_Ij, EU)
 end
 
 function set_MIP_start(diagram, Z, S_active, z, x_s)
+    S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
     for (k,j) in enumerate(Z.D)
-        for s_Ij in paths(diagram.S[Z.I_d[k]])
+        for s_Ij in paths(S_values_ordered[Z.I_d[k]])
                 set_start_value(z.z[k][s_Ij..., Z.Z_d[k](s_Ij)], 1)
         end
     end
@@ -143,14 +154,22 @@ function singlePolicyUpdate(diagram::InfluenceDiagram, model::Model, z::Decision
     EU, strategy, S_active = randomStrategy(diagram)
     push!(solutionhistory, (EU, (time_ns()-t1)/1E6, deepcopy(strategy)))
 
+    I_j_keys = collect(keys(diagram.I_j))
+    I_j_keys_ordered, I_j_keys_ordered_and_indexed = order_and_index(diagram, I_j_keys)
+    I_j_ordered_and_indexed = order_and_index(diagram, I_j_keys_ordered, true)
+    S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
+    D_keys = collect(keys(diagram.D))
+    D_keys_ordered, D_keys_ordered_and_indexed = order_and_index(diagram, D_keys)
+    D_keys_ordered_and_indexed = map(Int16, D_keys_ordered_and_indexed)
+
     # In principle, this always converges, but we set a maximum number of iterations anyway to avoid very long solution times
     for iter in 1:20
         # Loop through all nodes
-        for (idx, j) in enumerate(diagram.D)
+        for (idx, j) in enumerate(D_keys_ordered_and_indexed)
             # println("Node $(diagram.Names[j]), iteration $iter")
-            I_j = diagram.I_j[j]
+            I_j = I_j_ordered_and_indexed[j]
             # Loop through all information states
-            for s_Ij in paths(diagram.S[I_j])
+            for s_Ij in paths(S_values_ordered[I_j])
                 # Check if any improvement has happened since the last time this node and information state was visited
                 # If not, the algorithm terminates with a locally optimal solution
                 if iter >= 2

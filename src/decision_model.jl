@@ -3,20 +3,13 @@ using JuMP
 #ONKO S:N TYYPPI TÄSSÄ OIKEIN, SAAKO JOTENKIN STATES-TYYPIKSI?
 function decision_variable(model::Model, S::Vector{State}, d::Node, I_d::Vector{Node}, base_name::String="")
     # Create decision variables.
-    println(d)
-    println(I_d)
-    #println("base_name" * base_name)
     dims = S[[I_d; d]]
-    println(dims)
     z_d = Array{VariableRef}(undef, dims...)
-    println("z_d: $z_d")
     for s in paths(dims)
         z_d[s...] = @variable(model, binary=true, base_name=base_name)
     end
-    println("z_d: $z_d")
     # Constraints to one decision per decision strategy.
     for s_I in paths(S[I_d])
-        println(s_I)
         @constraint(model, sum(z_d[s_I..., s_d] for s_d in 1:S[d]) == 1)
     end
     return z_d
@@ -46,27 +39,26 @@ z = DecisionVariables(model, diagram)
 ```
 """
 function DecisionVariables(model::Model, diagram::InfluenceDiagram; names::Bool=false, name::String="z")
+    #ORDERING AND INDEXING OF D_KEYS AND D_I_j
     D_keys = collect(keys(diagram.D))
-    index_values = [index_of(diagram, key) for key in D_keys]
-    sorted_permutation = sortperm(index_values)
-    D_keys = D_keys[sorted_permutation]
-    int_vector3 = map(s -> index_of(diagram, s), D_keys)
-    println("int_vector3:")
-    println(int_vector3)
-    int_vector3 = map(Int16, int_vector3)
+    #println("D_keys:")
+    #println(D_keys)
+    D_keys_ordered, D_keys_ordered_and_indexed = order_and_index(diagram, D_keys)
 
-    D_I_j = fill(Vector{Name}(), length(D_keys))
-    for i in 1:length(D_keys)
-        D_I_j[i] = diagram.I_j[D_keys[i]]
-    end
-    vector_of_ints3 = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), D_I_j)
+    #println(D_keys_ordered)
+    #println(D_keys_ordered_and_indexed)
 
-    println("vector_of_ints3:")
-    println(vector_of_ints3)
+    D_keys_ordered_and_indexed = map(Int16, D_keys_ordered_and_indexed)
+    #D_I_j_ordered_and_indexed = order_and_index_information_set(diagram, D_keys_ordered)
+    D_I_j_ordered_and_indexed = order_and_index(diagram, D_keys_ordered, true)
 
-    DecisionVariables(int_vector3, 
-                      vector_of_ints3, 
-                      [decision_variable(model, collect(values(diagram.S)), d, I_d, (names ? "$(name)_$(d.j)$(s)" : "")) for (d, I_d) in zip(int_vector3, vector_of_ints3)]
+    #println(D_I_j_ordered_and_indexed)
+
+    S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
+
+    DecisionVariables(D_keys_ordered_and_indexed, 
+                      D_I_j_ordered_and_indexed, 
+                      [decision_variable(model, collect(values(S_values_ordered)), d, I_d, (names ? "$(name)_$(d.j)$(s)" : "")) for (d, I_d) in zip(D_keys_ordered_and_indexed, D_I_j_ordered_and_indexed)]
     )
 end
 
@@ -95,7 +87,13 @@ Base.iterate(x_s::PathCompatibilityVariables, i) = iterate(x_s.data, i)
 
 
 function decision_strategy_constraint(model::Model, S::States, d::Node, I_d::Vector{Node}, D::Vector{Node}, z::Array{VariableRef}, x_s::PathCompatibilityVariables)
-
+    #println("decision_strategy_constraints:")
+    #println(S)
+    #println(d)
+    #println(I_d)
+    #println(D)
+    #println(z)
+    #println(x_s)
     # states of nodes in information structure (s_d | s_I(d))
     dims = S[[I_d; d]]
 
@@ -161,28 +159,71 @@ function PathCompatibilityVariables(model::Model,
     if probability_scale_factor ≤ 0
         throw(DomainError("The probability_scale_factor must be greater than 0."))
     end
+    #println("α")
+    #println(α)
+    """
     if !(0 < α ≤ 1)
         throw(DomainError("α should be 0 < α ≤ 1"))
     end
-
+    """
     # Create path compatibility variable for each effective path.
     N = length(diagram.S)
+    S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
+
+    #println("model: $model")
+    #println("names: $names")
+    #println("S_values_ordered:")
+    #println(S_values_ordered)
+    #println("fixed:")
+    #println(fixed)
+    #println(diagram.P)
+
+    for s in paths(S_values_ordered, fixed)
+        #println(s)
+        #println(diagram.P(s))
+    end
 
     variables_x_s = Dict{Path{N}, VariableRef}(
         s => path_compatibility_variable(model, (names ? "$(name)$(s)" : ""))
-        for s in paths(values(diagram.S), fixed)
-        if !iszero(diagram.P[s]) && !is_forbidden(s, forbidden_paths)
+        for s in paths(S_values_ordered, fixed)
+        if !iszero(diagram.P(s)) && !is_forbidden(s, forbidden_paths)
     )
+
+    #println(variables_x_s)
 
     x_s = PathCompatibilityVariables{N}(variables_x_s)
 
+    #println("diagram.I_j:")
+    #println(diagram.I_j)
+
+    I_j_keys = collect(keys(diagram.I_j))
+    #println("I_j_keys:")
+    #println(I_j_keys)
+    I_j_keys_ordered, I_j_keys_ordered_and_indexed = order_and_index(diagram, I_j_keys)
+    I_j_ordered_and_indexed = order_and_index(diagram, I_j_keys_ordered, true)
+    #println(z)
+    #println(z.D)
+    #println(keys(z.D))
+    #println(typeof(keys(z.D)))
+    #println(z.z)
+    #println(I_j_ordered_and_indexed)
+    #println(typeof(S_values_ordered))
+    S_values_ordered = States(S_values_ordered)
+    #println(typeof(S_values_ordered))
+    
+
+
     # Add decision strategy constraints for each decision node
-    for d in keys(z.D)
-        decision_strategy_constraint(model, diagram.S, d, diagram.I_j[d], z.D, z.z[d], x_s)
+    #for d in keys(z.D)
+    for (d, z_d) in zip(z.D, z.z)
+        #FOR SOME REASON, ABOVE FOR LOOP GIVES TYPE INT64 TO D. IS THERE A BETTER WAY THAN HAVING TO CONVERT DATATYPE TO INT16?
+        d = convert(Int16, d)
+        #println(typeof(d))
+        decision_strategy_constraint(model, S_values_ordered, d, I_j_ordered_and_indexed[d], z.D, z_d, x_s)
     end
 
     if probability_cut
-        @constraint(model, sum(x * diagram.P[s] * probability_scale_factor for (s, x) in x_s) == 1.0 * probability_scale_factor)
+        @constraint(model, sum(x * diagram.P(s) * probability_scale_factor for (s, x) in x_s) == 1.0 * probability_scale_factor)
     end
 
     x_s
@@ -359,31 +400,21 @@ function ID_to_RJT(diagram)
     C_rjt = Dict{String, Vector{String}}()
     A_rjt = []
     #VAI VOISIKO KÄYTTÄÄ SUORAAN DIAGRAM.NAMES, VAIKUTTAAKO JÄRJESTYS?
-    println(collect(keys(diagram.Nodes)))
     #namelist = [node.name for node in diagram.Nodes]
-    namelist = collect(keys(diagram.Nodes))
+    #namelist = collect(keys(diagram.Nodes))
     namelist = ["H1", "T1", "D1", "C1", "H2", "T2", "D2", "C2", "H3", "T3", "D3", "C3", "H4", "MP"]
-    println("namelist:")
-    println(namelist)
+    #println("namelist:")
+    #println(namelist)
     
     for j in length(diagram.Nodes):-1:1
-        #println(diagram.Nodes)
-        #C_j = copy(diagram.Nodes[j].I_j)
-        #println(namelist[j])
-        
         C_j = copy(diagram.Nodes[namelist[j]].I_j)
-        
         #println(C_j)
         push!(C_j, namelist[j])
-        #println("IJ1")
-        #println(diagram.I_j["H1"])
         for a in A_rjt 
             if a[1] == namelist[j]
                 push!(C_j, setdiff(C_rjt[a[2]], [a[2]])...)
             end
         end
-        #println("IJ2")
-        #println(diagram.I_j["H1"])
         C_j = unique(C_j)
         C_j_aux = sort([(elem, findfirst(isequal(elem), namelist)) for elem in C_j], by = last)
         C_j = [C_j_tuple[1] for C_j_tuple in C_j_aux]
@@ -394,9 +425,9 @@ function ID_to_RJT(diagram)
             push!(A_rjt, (namelist[u], namelist[j]))
         end
     end
-    println(C_rjt)
-    println(A_rjt)
-    println("")
+    #println(C_rjt)
+    #println(A_rjt)
+    #println("")
     
     return C_rjt, A_rjt
 end
@@ -476,6 +507,7 @@ function cluster_variables_and_constraints(model, diagram, z)
     println(Y)
     println("")
 """
+    #SHOULD THIS BE KEPT?
     z_dict = Dict{String, Array{VariableRef}}()
     idx = 1
     for name in diagram.Names
@@ -487,40 +519,33 @@ function cluster_variables_and_constraints(model, diagram, z)
 
     # Get the RJT structure
     C_rjt, A_rjt = ID_to_RJT(diagram)
-    
-    println("C_rjt:")
-    println(C_rjt)
-    println(diagram.States)
 
     # Variables corresponding to the nodes in the RJT
     μ = Dict{String, Array{VariableRef}}()
     for j in keys(C_rjt)
-        println(j)
+        #println(j)
         if !isa(diagram.Nodes[j], ValueNode)
             μ[j] = Array{VariableRef}(undef, Tuple(length.([getindex.(Ref(diagram.States), C_rjt[j])]...)))
             for index in CartesianIndices(μ[j])
                 μ[j][index] = @variable(model, base_name="μ_$j($(join(Tuple(index),',')))", lower_bound=0)
-                #println(μ[j][index])
             end
             # Probability distributions μ sum to 1
             @constraint(model, sum(μ[j]) == 1)
         end
     end
 
-    #println(μ)
-    println("testi")
-    println("μ: $μ")
+    #println("μ: $μ")
     
     for a in A_rjt
-        println(a)
+        #println(a)
         if !isa(diagram.Nodes[a[2]], ValueNode)
             intersection = C_rjt[a[1]] ∩ C_rjt[a[2]]
-            println(intersection)
+            #println(intersection)
             C1_minus_C2 = Tuple(setdiff(collect(1:length(C_rjt[a[1]])), indexin(intersection, C_rjt[a[1]])))
-            println(C1_minus_C2)
+            #println(C1_minus_C2)
             C2_minus_C1 = Tuple(setdiff(collect(1:length(C_rjt[a[2]])), indexin(intersection, C_rjt[a[2]])))
-            println(C2_minus_C1)
-            println("")
+            #println(C2_minus_C1)
+            #println("")
             @constraint(model, 
                 dropdims(sum(μ[a[1]], dims=C1_minus_C2), dims=C1_minus_C2) .== 
                 dropdims(sum(μ[a[2]], dims=C2_minus_C1), dims=C2_minus_C1))
@@ -531,10 +556,10 @@ function cluster_variables_and_constraints(model, diagram, z)
     μ_breve = Dict{String, Array{VariableRef}}()
     for j in keys(C_rjt)
         if !isa(diagram.Nodes[j], ValueNode)
-            println(diagram.S)
-            println(diagram.States)
+            #println(diagram.S)
+            #println(diagram.States)
             μ_breve[j] = Array{VariableRef}(undef, Tuple(length.([getindex.(Ref(diagram.States), setdiff(C_rjt[j], [j]))]...)))
-            println(μ_breve[j])
+            #println(μ_breve[j])
             for index in CartesianIndices(μ_breve[j])
                 # Moments μ_{\breve{C}_v} (the moments from above, but with the last variable dropped out)
                 μ_breve[j][index] = @variable(model, base_name="μ_breve_$j($(join(Tuple(index),',')))", lower_bound=0)
@@ -544,52 +569,29 @@ function cluster_variables_and_constraints(model, diagram, z)
         end
     end
 
-    println("testi6")
-    println("μ_breve: $μ_breve")
-    println("")
-    println(diagram.Names)
+    #println("μ_breve: $μ_breve")
     #println("")
-    #println(I_j)
-    println("diagram.X:")
-    println(diagram.X)
 
     # Add in the conditional probabilities and decision strategies
     for name in diagram.Names 
-        println("name:")
-        println(name)
-        #println("diagram.X[name]:")
-        #println(diagram.X[name])
+        #println("name:")
+        #println(name)
         if !isa(diagram.Nodes[name], ValueNode) # In our structure, value nodes are not stochastic and the whole objective thing doesn't really work in this context
-            #println(node)
-            println(C_rjt[name])
-            println(diagram.I_j[name])
-            I_j_mapping = [findfirst(isequal(node), C_rjt[name]) for node in diagram.I_j[name]] # Map the information set to the variables in the cluster
+            #println(C_rjt[name])
             #println(diagram.I_j[name])
-            println(I_j_mapping)
+            I_j_mapping = [findfirst(isequal(node), C_rjt[name]) for node in diagram.I_j[name]] # Map the information set to the variables in the cluster
+            #println(I_j_mapping)
             for index in CartesianIndices(μ_breve[name])
                 #println(μ_breve[name])
                 #println(index)
                 for s_j in 1:length(diagram.States[name])
-                    #println(length(μ[name]))
-                    #println("testi")
-                    #println(length(diagram.States[name]))
-                    #println(I_j_mapping)
-                    #println([Tuple(index)[I_j_mapping]...,s_j])
-                    #println(diagram.X[name][Tuple(index)[I_j_mapping]...,s_j])
                     if isa(diagram.Nodes[name], ChanceNode)
                         # μ_{C_v} = p*μ_{\breve{C}_v}
-                        println(μ[name][Tuple(index)...,s_j])
-                        println(μ_breve[name][index])
-                        #println([Tuple(index)[I_j_mapping]...,s_j])
-                        println("testiprinttaus:")
-                        println(diagram.X[name])
-                        #println(index)
-                        println(I_j_mapping)
-                        #println(s_j)
-                        #println(diagram.X[name][Tuple(index)[I_j_mapping]...,s_j])
-                        @constraint(model, μ[name][Tuple(index)...,s_j] == diagram.X[name][Tuple(index)[I_j_mapping]...,s_j]*μ_breve[name][index])
                         #println(μ[name][Tuple(index)...,s_j])
                         #println(μ_breve[name][index])
+                        #println([Tuple(index)[I_j_mapping]...,s_j])
+                        #println(diagram.X[name])
+                        @constraint(model, μ[name][Tuple(index)...,s_j] == diagram.X[name][Tuple(index)[I_j_mapping]...,s_j]*μ_breve[name][index])
                     elseif isa(diagram.Nodes[name], DecisionNode)
                         # μ_{C_v} ≤ z
                         @constraint(model, μ[name][Tuple(index)...,s_j] <= z_dict[name][Tuple(index)[I_j_mapping]...,s_j])
@@ -607,15 +609,12 @@ function cluster_variables_and_constraints(model, diagram, z)
     for j in keys(C_rjt)
         if isa(diagram.Nodes[j], ValueNode)
             i = A_rjt[findfirst(a -> a[2] == j, A_rjt)][1]
-            #println("nakki")
-            println(i)
             I_j_mapping = [findfirst(isequal(node), C_rjt[i]) for node in diagram.I_j[j]]
-            println(I_j_mapping)
+            #println(I_j_mapping)
             for index in CartesianIndices(μ[i])
                 set_objective_coefficient(model, μ[i][index], diagram.Y[j][Tuple(index)[I_j_mapping]...])
             end
         end
     end
-    
     return μ
 end

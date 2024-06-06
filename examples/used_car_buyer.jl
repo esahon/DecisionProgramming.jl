@@ -1,8 +1,7 @@
-
 using Logging
 #using JuMP, Gurobi
 using JuMP, HiGHS
-#using DecisionProgramming
+using DecisionProgramming
 
 @info("Creating the influence diagram.")
 diagram = InfluenceDiagram()
@@ -54,9 +53,17 @@ generate_diagram!(diagram)
 @info("Creating the decision model.")
 model = Model()
 z = DecisionVariables(model, diagram)
+println("z:")
+println(z)
 x_s = PathCompatibilityVariables(model, diagram, z)
+println("x_s:")
+println(x_s)
 EV = expected_value(model, diagram, x_s)
+println("EV:")
+println(EV)
 @objective(model, Max, EV)
+println("model:")
+println(model)
 
 @info("Starting the optimization process.")
 #optimizer = optimizer_with_attributes(
@@ -72,7 +79,9 @@ optimize!(model)
 @info("Extracting results.")
 Z = DecisionStrategy(z)
 S_probabilities = StateProbabilities(diagram, Z)
+println(S_probabilities)
 U_distribution = UtilityDistribution(diagram, Z)
+println(U_distribution)
 
 @info("Printing decision strategy:")
 print_decision_strategy(diagram, Z, S_probabilities)

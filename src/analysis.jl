@@ -15,7 +15,7 @@ struct CompatiblePaths
     Z::DecisionStrategy
     fixed::FixedPath
     function CompatiblePaths(S, C, Z, fixed)
-        println(C)
+        #println(C)
         if !all(k∈Set(C) for k in keys(fixed))
             throw(DomainError("You can only fix chance states."))
         end
@@ -40,10 +40,9 @@ end
 ```
 """
 function CompatiblePaths(diagram::InfluenceDiagram, Z::DecisionStrategy, fixed::FixedPath=Dict{Node, State}())
-    #TÄLLE TARVITAAN FUNKTIO
-    int_vector4 = map(s -> index_of(diagram, s), collect(keys(diagram.C)))
-
-    CompatiblePaths(collect(values(diagram.S)), int_vector4, Z, fixed)
+    C_indexed = map(s -> index_of(diagram, s), collect(keys(diagram.C)))
+    S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
+    CompatiblePaths(S_values_ordered, C_indexed, Z, fixed)
 end
 
 #MUUTETTU TYPE states --> Vector{Int16}, voisi olla hyvä selvitä ilman muutosta
@@ -175,10 +174,11 @@ StateProbabilities(diagram, Z, Node(2), State(1), prior_probabilities)
 function StateProbabilities(diagram::InfluenceDiagram, Z::DecisionStrategy, node::Node, state::State, prior_probabilities::StateProbabilities)
     prior = prior_probabilities.probs[node][state]
     fixed = deepcopy(prior_probabilities.fixed)
+    S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
 
     push!(fixed, node => state)
-    probs = Dict(i => zeros(diagram.S[i]) for i in 1:length(diagram.S))
-    for s in CompatiblePaths(diagram, Z, fixed), i in 1:length(diagram.S)
+    probs = Dict(i => zeros(S_values_ordered[i]) for i in 1:length(S_values_ordered))
+    for s in CompatiblePaths(diagram, Z, fixed), i in 1:length(S_values_ordered)
         probs[i][s[i]] += diagram.P(s) / prior
     end
     StateProbabilities(probs, fixed)
@@ -202,8 +202,9 @@ StateProbabilities(diagram, Z, node, state, prior_probabilities)
 ```
 """
 function StateProbabilities(diagram::InfluenceDiagram, Z::DecisionStrategy, node::Name, state::Name, prior_probabilities::StateProbabilities)
+    States_values_ordered = order(diagram, collect(values(diagram.States)), collect(keys(diagram.States)))
     node_index = findfirst(j -> j ==node, diagram.Names)
-    state_index = findfirst(j -> j == state, diagram.States[node_index])
+    state_index = findfirst(j -> j == state, States_values_ordered[node_index])
 
     return StateProbabilities(diagram, Z, Node(node_index), State(state_index), prior_probabilities)
 end
@@ -222,12 +223,10 @@ StateProbabilities(diagram, Z)
 ```
 """
 function StateProbabilities(diagram::InfluenceDiagram, Z::DecisionStrategy)
-    println(diagram)
-    println(Z)
 
-    println("diagram.S:")
-    println(diagram.S)
-    println(collect(values(diagram.S)))
+    #println("diagram.S:")
+    #println(diagram.S)
+    #println(collect(values(diagram.S)))
 
     #S_values = collect(values(diagram.S))
     #index_values = [index_of(diagram, key) for key in S_values]
@@ -236,11 +235,6 @@ function StateProbabilities(diagram::InfluenceDiagram, Z::DecisionStrategy)
 
     probs = Dict(i => zeros(collect(values(diagram.S))[i]) for i in 1:length(collect(values(diagram.S))))
     for s in CompatiblePaths(diagram, Z), i in 1:length(collect(values(diagram.S)))
-        #println("s:")
-        #println(s)
-        #println(s[i])
-        #println("i:")
-        #println(i)
         probs[i][s[i]] += diagram.P(s)
     end
     StateProbabilities(probs, Dict{Node, State}())

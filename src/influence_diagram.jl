@@ -695,11 +695,11 @@ function add_probabilities!(diagram::InfluenceDiagram, node::Name, probabilities
 
     if size(probabilities) == Tuple([diagram.S[j] for j in [diagram.I_j[node]..., node]])
         if isa(probabilities, ProbabilityMatrix)
-            #println("1")
             # Check that probabilities sum to one happens in Probabilities
+            # REFERRING USING INDEX_OF TO THE RIGHT NODE, SHOULD PROBABILITY STRUCT BE CHANGED SO THAT THIS MUST NOT BE DONE?
             diagram.X[node] = Probabilities(Node(index_of(diagram, node)), probabilities.matrix)
         else
-            #println("2")
+            # SAME AS ABOVE
             diagram.X[node] = Probabilities(Node(index_of(diagram, node)), probabilities)
         end
     else
@@ -780,15 +780,28 @@ function UtilityMatrix(diagram::InfluenceDiagram, node::Name)
         throw(DomainError("Only value nodes can have consequence matrices."))
     end
 
-    # Find the node's indexand it's I_v nodes
+    # Find the node's index and it's I_v nodes
     I_v = diagram.I_j[node]
     names = [name for name in I_v]
 
     indices = [Dict{Name, Int}(state => i for (i, state) in enumerate(diagram.States[name])) for name in I_v]
 
     sizes = [diagram.S[name] for name in I_v]
-    matrix = fill(Inf, sizes...)
-
+    #println(typeof(sizes))
+    matrix = fill(Float32(Inf), sizes...)
+    #println(matrix)
+    #println(typeof(matrix))
+    #matrix2 = convert(Vector{Float32}, matrix)
+    #matrix = convert(Array{Float32,1}, matrix)
+    
+    #println("UtilityMatrix:")
+    #println(names)
+    #println(indices)
+    #println(matrix)
+    #println(typeof(names))
+    #println(typeof(indices))
+    #println(typeof(matrix))
+    #println(typeof(matrix2))
     return UtilityMatrix(names, indices, matrix)
 end
 
@@ -837,9 +850,14 @@ function add_utilities!(diagram::InfluenceDiagram, node::Name, utilities::Abstra
     if any(u ==Inf for u in utilities)
         throw(DomainError("Utility values should be less than infinity."))
     end
-    println(size(utilities))
-    println(diagram.I_j)
-    if size(utilities) == Tuple([diagram.S[j] for j in diagram.I_j[node]])
+
+    #println("diagram.S:")
+    #println(diagram.S)
+    #println(collect(values(diagram.S)))
+    #println("diagram.I_j:")
+    #println(diagram.I_j)
+    #SHOULD THESE ALSO BE ORDERED AND ALSO collect(values(diagram.S)) USED INSTEAD?
+    if size(utilities) == Tuple((diagram.S[j] for j in diagram.I_j[node]))
         if isa(utilities, UtilityMatrix)
             diagram.Y[node] = Utilities(Node(index_of(diagram, node)), utilities.matrix)
         else
@@ -895,7 +913,7 @@ generate_arcs!(diagram)
 ```
 """
 function generate_arcs!(diagram::InfluenceDiagram)
-    #ROUGHLY SAME AS BEFORE
+    #SIMILAR TO BEFORE
     C_and_D = filter(x -> !isa(x[2], ValueNode), pairs(diagram.Nodes)) # Collects all nodes not ValueNodes
     n_CD = length(C_and_D)
     V_nodes = filter(x -> isa(x[2], ValueNode), pairs(diagram.Nodes)) # Collects all ValueNodes
@@ -924,45 +942,13 @@ function generate_arcs!(diagram::InfluenceDiagram)
     C = filter(x -> isa(x[2], ChanceNode), pairs(diagram.Nodes))
     D = filter(x -> isa(x[2], DecisionNode), pairs(diagram.Nodes))
     V = filter(x -> isa(x[2], ValueNode), pairs(diagram.Nodes))
-    #println(I_j)
-    """
-    println("Names")
-    println(diagram.Names)
-    for node in diagram.Names
-        if isa(diagram.Nodes[node], ValueNode)
-            index = findfirst(diagram.Names, node)
-            splice!(diagram.Names, index, 1)
-            push!(diagram.Names, node)
-        end
-    end
-    
-    println(diagram.Names)
-    new_names = String[]  # Create a new empty array
-    value_node = ""
-    for node in diagram.Names
-        if isa(diagram.Nodes[node], ValueNode)
-            value_node = node  # Store the value node
-        else
-            push!(new_names, node)  # Add non-ValueNode elements to the new array
-        end
-    end
-    
-    if value_node != ""
-        push!(new_names, value_node)  # Add the value node to the end of the new array
-        diagram.Names = new_names  # Update the diagram.Names with the new array
-    end
-    """
 
+    #NAMES REORDERED SO THAT VALUE NODES ARE AT THE END
     value_nodes = [node for node in diagram.Names if isa(diagram.Nodes[node], ValueNode)]
     non_value_nodes = filter(x -> !isa(diagram.Nodes[x], ValueNode), diagram.Names)
     diagram.Names = vcat(non_value_nodes, value_nodes)
 
-    println(diagram.Names)
-    #diagram.Names = Names
     diagram.I_j = I_j
-    println("I_j:")
-    println(I_j)
-    println(I_j["H1"])
     diagram.States = states
     diagram.S = S
     diagram.C = C
@@ -1012,57 +998,57 @@ function generate_diagram!(diagram::InfluenceDiagram;
     positive_path_utility::Bool=false,
     negative_path_utility::Bool=false)
 
-    println("testi95")
     # There's no need to sort X and Y dictionaries as dictionary order doesn't matter for your use case
 
     # Declare P and U if defaults are used
     if default_probability
-        #TARKISTA MITEN VOI PARANTAA
         C_keys = collect(keys(diagram.C))
-        index_values = [index_of(diagram, key) for key in C_keys]
-        sorted_permutation = sortperm(index_values)
-        C_keys = C_keys[sorted_permutation]
-        #C_keys = collect(keys(diagram.C))
-        C_I_j = fill(Vector{Name}(), length(C_keys))
-        for i in 1:length(C_keys)
-            C_I_j[i] = diagram.I_j[C_keys[i]]
-        end
 
-        # Apply the transformation to the vector of vectors
-        vector_of_ints = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), C_I_j)
-        println(vector_of_ints)
-
-        int_vector = map(s -> index_of(diagram, s), C_keys)
-
-        println(int_vector)
-
-        println("collect(values(diagram.X)):")
-        println(collect(values(diagram.X)))
-
+        #ORDERING OF X.VALUES, THIS CAN'T BE AT LEAST EASILY DONE WITH ORDER_AND_INDEX FUNCTION BELOW, BECAUSE KEYS(DIAGRAM.X) IS USED TO SORT VALUES(DIAGRAM.X)
         X_keys = collect(keys(diagram.X))
-        index_values = [index_of(diagram, key) for key in X_keys]
-        sorted_permutation = sortperm(index_values)
         X_values = collect(values(diagram.X))
-        X_values = X_values[sorted_permutation]
+        X_values_ordered = order(diagram, X_values, X_keys)
 
-        diagram.P = DefaultPathProbability(int_vector, vector_of_ints, X_values)
+        C_keys_ordered, C_keys_ordered_and_indexed = order_and_index(diagram, C_keys)
+        #C_I_j_ordered_and_indexed = order_and_index_information_set(diagram, C_keys_ordered)
+        C_I_j_ordered_and_indexed = order_and_index(diagram, C_keys_ordered, true)
+        #C_I_j_ordered_and_indexed = order(diagram, CC_keys)
+
+        #println(C_keys_ordered_and_indexed)
+        println("C_I_j_ordered_and_indexed:")
+        println(C_I_j_ordered_and_indexed)
+        println(diagram.I_j)
+        println(diagram.C)
+
+        diagram.P = DefaultPathProbability(
+            C_keys_ordered_and_indexed, 
+            C_I_j_ordered_and_indexed, 
+            X_values_ordered
+        )
+        #println(diagram.P)
     end
 
     if default_utility
+        #ORDERING AND INDEXING OF V.I_j
         V_keys = collect(keys(diagram.V))
-        V_I_j = fill(Vector{Name}(), length(V_keys))
-        for i in 1:length(V_keys)
-            V_I_j[i] = diagram.I_j[V_keys[i]]
-        end
-        vector_of_ints2 = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), V_I_j)
 
-        diagram.U = DefaultPathUtility(vector_of_ints2, collect(values(diagram.Y)))
-        #diagram.U = DefaultPathUtility(values(diagram.I_j[collect(keys(diagram.V))]), collect(values(diagram.Y)))
+        #println("diagram.Y:")
+        #println(diagram.Y)
+        #println(collect(values(diagram.Y)))
+
+        #V_I_j_indexed_and_ordered = order_and_index_information_set(diagram, V_keys)
+        V_I_j_indexed_and_ordered = order_and_index(diagram, V_keys, true)
+
+        #println(V_I_j_indexed_and_ordered)
+
+        #SHOULD Y (AND BELOW S) ALSO BE ORDERED?
+        diagram.U = DefaultPathUtility(V_I_j_indexed_and_ordered, collect(values(diagram.Y)))
+        S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
         if positive_path_utility
             # Conversion to Float32 using Utility(), since machine default is Float64
-            diagram.translation = 1 -  minimum(diagram.U(s) for s in paths(values(diagram.S)))
+            diagram.translation = 1 -  minimum(diagram.U(s) for s in paths(S_values_ordered))
         elseif negative_path_utility
-            diagram.translation = -1 - maximum(diagram.U(s) for s in paths(values(diagram.S)))
+            diagram.translation = -1 - maximum(diagram.U(s) for s in paths(S_values_ordered))
         else
             diagram.translation = 0
         end
@@ -1089,8 +1075,73 @@ function index_of(diagram::InfluenceDiagram, node::Name)
 end
 
 
+function order_and_index(diagram::InfluenceDiagram, name_vector::Vector{Name}, information_set::Bool=false)
+    if information_set == false
+        index_values = [index_of(diagram, key) for key in name_vector]
+        sorted_permutation = sortperm(index_values)
+        name_vector_ordered = name_vector[sorted_permutation]
+        name_vector_ordered_and_indexed = map(s -> index_of(diagram, s), name_vector_ordered)
+
+        return name_vector_ordered, name_vector_ordered_and_indexed
+    end
+
+    if information_set == true
+        information_set_vector_ordered = fill(Vector{Name}(), length(name_vector))
+        for i in 1:length(name_vector)
+            information_set_vector_ordered[i] = diagram.I_j[name_vector[i]]
+        end
+        information_set_vector_ordered_and_indexed = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), information_set_vector_ordered)
+        return information_set_vector_ordered_and_indexed
+    end
+end
+
+
+function order(diagram::InfluenceDiagram, target_vector, sorter_vector::Vector{String})
+    index_values = [index_of(diagram, key) for key in sorter_vector]
+    sorted_permutation = sortperm(index_values)
+    ordered_vector = target_vector[sorted_permutation]
+
+    return ordered_vector
+end
+
 
 """
+
+function order_and_index(diagram::InfluenceDiagram, name_vector::Vector{Name})
+    index_values = [index_of(diagram, key) for key in name_vector]
+    sorted_permutation = sortperm(index_values)
+    name_vector_ordered = name_vector[sorted_permutation]
+    name_vector_ordered_and_indexed = map(s -> index_of(diagram, s), name_vector_ordered)
+    return name_vector_ordered_and_indexed
+
+    if information_set == true
+        information_set_vector_ordered = fill(Vector{Name}(), length(name_vector))
+        for i in 1:length(name_vector)
+            information_set_vector_ordered[i] = diagram.I_j[name_vector[i]]
+        end
+        information_set_vector_ordered_and_indexed = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), information_set_vector_ordered)
+        return information_set_vector_ordered_and_indexed
+    end
+    
+
+
+function order_and_index_information_set(diagram::InfluenceDiagram, name_vector::Vector{Name})
+    information_set_vector_ordered = fill(Vector{Name}(), length(name_vector))
+    for i in 1:length(name_vector)
+        information_set_vector_ordered[i] = diagram.I_j[name_vector[i]]
+    end
+    information_set_vector_ordered_and_indexed = map(strings -> map(s -> Int16(index_of(diagram, s)), strings), information_set_vector_ordered)
+    return information_set_vector_ordered_and_indexed
+end
+
+function order{T}(diagram::InfluenceDiagram, target_vector::Vector{T}, sorter_vector::Vector{Name})
+    index_values = [index_of(diagram, key) for key in sorter_vector]
+    sorted_permutation = sortperm(index_values)
+    ordered_vector = target_vector[sorted_permutation]
+
+    return ordered_vector
+end
+
     function num_states(diagram::InfluenceDiagram, node::Name)
 
 Get the number of states in a given node.
@@ -1101,6 +1152,7 @@ julia> NS_O = num_states(diagram, "O")
 2
 ```
 """
+
 function num_states(diagram::InfluenceDiagram, node::Name)
     if !haskey(diagram.S, node)
         throw(DomainError("Node $node not found in the diagram."))
@@ -1125,6 +1177,7 @@ ForbiddenPath(diagram, ["R1", "R2"], [("high", "low"), ("low", "high")])
 ```
 """
 function ForbiddenPath(diagram::InfluenceDiagram, nodes::Vector{Name}, paths::Vector{NTuple{N, Name}}) where N
+    States_values_ordered = order(diagram, collect(values(diagram.States)), collect(keys(diagram.States)))
     node_indices = Vector{Node}()
     for node in nodes
         j = findfirst(i -> i == node, diagram.Names)
@@ -1138,7 +1191,7 @@ function ForbiddenPath(diagram::InfluenceDiagram, nodes::Vector{Name}, paths::Ve
     for s in paths
         s_states = Vector{State}()
         for (i, s_i) in enumerate(s)
-            s_i_index = findfirst(x -> x == s_i, diagram.States[node_indices[i]])
+            s_i_index = findfirst(x -> x == s_i, States_values_ordered[node_indices[i]])
             if isnothing(s_i_index)
                 throw(DomainError("Node $(nodes[i]) does not have a state called $s_i."))
             end
@@ -1175,6 +1228,7 @@ julia> vec(collect(paths(states, fixedpath)))
 ```
 """
 function FixedPath(diagram::InfluenceDiagram, fixed::Dict{Name, Name})
+    States_values_ordered = order(diagram, collect(values(diagram.States)), collect(keys(diagram.States)))
     fixed_paths = Dict{Node, State}()
 
     for (j, s_j) in fixed
@@ -1183,7 +1237,7 @@ function FixedPath(diagram::InfluenceDiagram, fixed::Dict{Name, Name})
             throw(DomainError("Node $j does not exist."))
         end
 
-        s_j_index = findfirst(s -> s == s_j, diagram.States[j_index])
+        s_j_index = findfirst(s -> s == s_j, States_values_ordered[j_index])
         if isnothing(s_j_index)
             throw(DomainError("Node $j does not have a state called $s_j."))
         end

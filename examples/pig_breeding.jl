@@ -1,7 +1,7 @@
 using Logging
 #using JuMP, Gurobi
 using JuMP, HiGHS
-#using DecisionProgramming
+using DecisionProgramming
 
 const N = 4
 
@@ -60,10 +60,10 @@ model = Model()
 #println(diagram)
 z = DecisionVariables(model, diagram)
 println("")
-println("z: $z")
+#println("z: $z")
 x_s = PathCompatibilityVariables(model, diagram, z, probability_cut = false)
 EV = expected_value(model, diagram, x_s)
-println("EV: $EV")
+#println("EV: $EV")
 @objective(model, Max, EV)
 
 @info("Starting the optimization process.")

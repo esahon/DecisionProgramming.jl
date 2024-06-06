@@ -1,5 +1,5 @@
 using Logging, Random
-using JuMP, Gurobi
+using JuMP, HiGHS
 using DecisionProgramming
 
 Random.seed!(42)
@@ -108,13 +108,18 @@ application_investment_cost = @expression(model, [i=1:n_DP, j=1:n_CT, k=1:n_DA],
 application_value = @expression(model, [i=1:n_DP, j=1:n_CT, k=1:n_DA, l=1:n_CM], sum(x_A[i, j, k, a] * V_A[l, a] for a in 1:n_A))
 @objective(model, Max, sum( sum( diagram.P(convert.(State, (i,j,k,l))) * (application_value[i,j,k,l] - application_investment_cost[i,j,k]) for j in 1:n_CT, k in 1:n_DA, l in 1:n_CM ) - patent_investment_cost[i] for i in 1:n_DP ))
 
-
+"""
 @info("Starting the optimization process.")
 optimizer = optimizer_with_attributes(
     () -> Gurobi.Optimizer(Gurobi.Env()),
     "IntFeasTol"      => 1e-9,
     "LazyConstraints" => 1,
 )
+"""
+optimizer = optimizer_with_attributes(
+    () -> HiGHS.Optimizer()
+)
+
 set_optimizer(model, optimizer)
 optimize!(model)
 
@@ -134,9 +139,10 @@ Base.getindex(U::PathUtility, i::State) = getindex(U.data, i)
 Base.getindex(U::PathUtility, I::Vararg{State,N}) where N = getindex(U.data, I...)
 (U::PathUtility)(s::Path) = value.(U[s...])
 
+S_values_ordered = order(diagram, collect(values(diagram.S)), collect(keys(diagram.S)))
 path_utility = [@expression(model,
     sum(x_A[s[index_of(diagram, "DP")], s[index_of(diagram, "CT")], s[index_of(diagram, "DA")], a] * (V_A[s[index_of(diagram, "CM")], a] - I_a[a]) for a in 1:n_A) -
-    sum(x_T[s[index_of(diagram, "DP")], t] * I_t[t] for t in 1:n_T)) for s in paths(diagram.S)]
+    sum(x_T[s[index_of(diagram, "DP")], t] * I_t[t] for t in 1:n_T)) for s in paths(S_values_ordered)]
 diagram.U = PathUtility(path_utility)
 
 @info("Computing utility distribution.")
