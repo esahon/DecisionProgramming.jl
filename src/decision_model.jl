@@ -2,20 +2,22 @@ using JuMP
 
 function decision_variable(model::Model, S::States, d::Node, I_d::Vector{Node}, base_name::String="")
     # Create decision variables.
-    println(d)
-    println(I_d)
+    #println("d:")
+    #println(d)
+    #println("I_d:")
+    #println(I_d)
     #println("base_name" * base_name)
     dims = S[[I_d; d]]
-    println(dims)
+    #println(dims)
     z_d = Array{VariableRef}(undef, dims...)
-    println(z_d)
+    #println(z_d)
     for s in paths(dims)
         z_d[s...] = @variable(model, binary=true, base_name=base_name)
     end
-    println(z_d)
+    #println(z_d)
     # Constraints to one decision per decision strategy.
     for s_I in paths(S[I_d])
-        println(s_I)
+        #println(s_I)
         @constraint(model, sum(z_d[s_I..., s_d] for s_d in 1:S[d]) == 1)
     end
     return z_d
@@ -45,13 +47,14 @@ z = DecisionVariables(model, diagram)
 ```
 """
 function DecisionVariables(model::Model, diagram::InfluenceDiagram; names::Bool=false, name::String="z")
-    println(diagram.D)
-    println(diagram.I_j[diagram.D])
-    println(diagram.S)
-    println(diagram.States)
+    #println(diagram.D)
+    #println(diagram.I_j[diagram.D])
+    #println("diagram.S:")
+    #println(diagram.S)
+    #println(diagram.States)
     #println(diagram.d)
     #println(I_d)
-    println(zip(diagram.D, diagram.I_j[diagram.D]))
+    #println(zip(diagram.D, diagram.I_j[diagram.D]))
     DecisionVariables(diagram.D, diagram.I_j[diagram.D], [decision_variable(model, diagram.S, d, I_d, (names ? "$(name)_$(d.j)$(s)" : "")) for (d, I_d) in zip(diagram.D, diagram.I_j[diagram.D])])
 end
 
@@ -81,6 +84,13 @@ Base.iterate(x_s::PathCompatibilityVariables, i) = iterate(x_s.data, i)
 
 function decision_strategy_constraint(model::Model, S::States, d::Node, I_d::Vector{Node}, D::Vector{Node}, z::Array{VariableRef}, x_s::PathCompatibilityVariables)
 
+    #println("decision_strategy_constraints:")
+    #println(S)
+    #println(d)
+    #println(I_d)
+    #println(D)
+    #println(z)
+    #println(x_s)
     # states of nodes in information structure (s_d | s_I(d))
     dims = S[[I_d; d]]
 
@@ -153,24 +163,42 @@ function PathCompatibilityVariables(model::Model,
 
     # Create path compatibility variable for each effective path.
     N = length(diagram.S)
-    println("N: $N")
+    #println("model: $model")
+    #println("names: $names")
+    #println("diagram.S:")
+    #println(diagram.S)
+    #println("fixed:")
+    #println(fixed)
+    #println("")
+    #println(diagram.P)
+    #println("")
+
+    for s in paths(diagram.S, fixed)
+        #println(s)
+        #println(diagram.P(s))
+    end
+
     variables_x_s = Dict{Path{N}, VariableRef}(
         s => path_compatibility_variable(model, (names ? "$(name)$(s)" : ""))
         for s in paths(diagram.S, fixed)
         if !iszero(diagram.P(s)) && !is_forbidden(s, forbidden_paths)
     )
 
+    #println(variables_x_s)
+
     x_s = PathCompatibilityVariables{N}(variables_x_s)
-    println("x_s: $x_s")
+    #println("x_s: $x_s")
 
     # Add decision strategy constraints for each decision node
-    #println("nakki")
     #println(z)
-    #println(z_d)
     #println(z.D)
     #println(z.z)
+    #println(diagram.I_j)
+    #println("z.D keys:")
+    #println(keys(z.D))
+    #println(typeof(keys(z.D)))
     for (d, z_d) in zip(z.D, z.z)
-        #println(z_d)
+        #println(typeof(d))
         decision_strategy_constraint(model, diagram.S, d, diagram.I_j[d], z.D, z_d, x_s)
     end
 
@@ -228,12 +256,24 @@ Create an expected value objective.
 EV = expected_value(model, diagram, x_s)
 ```
 """
+
 function expected_value(model::Model,
     diagram::InfluenceDiagram,
     x_s::PathCompatibilityVariables)
 
     @expression(model, sum(diagram.P(s) * x * diagram.U(s, diagram.translation) for (s, x) in x_s))
 end
+
+"""
+function expected_value(model::Model,
+    diagram::InfluenceDiagram,
+    x_s::PathCompatibilityVariables,
+    probability_scale_factor::Float64 = 1.0)
+
+    @expression(model, sum(diagram.P(s) * x * diagram.U(s, diagram.translation) * probability_scale_factor for (s, x) in x_s))
+end
+"""
+
 
 """
     conditional_value_at_risk(model::Model,
@@ -352,8 +392,11 @@ function ID_to_RJT(diagram)
     C_rjt = Dict{String, Vector{String}}()
     A_rjt = []
     namelist = [node.name for node in diagram.Nodes]
+    println("namelist:")
+    println(namelist)
     for j in length(diagram.Nodes):-1:1
         C_j = copy(diagram.Nodes[j].I_j)
+        println(C_j)
         push!(C_j, namelist[j])
         for a in A_rjt 
             if a[1] == namelist[j]
@@ -465,6 +508,10 @@ function cluster_variables_and_constraints(model, diagram, z)
     # Get the RJT structure
     C_rjt, A_rjt = ID_to_RJT(diagram)
 
+    println("C_rjt:")
+    println(C_rjt)
+    println(S)
+
     # Variables corresponding to the nodes in the RJT
     μ = Dict{String, Array{VariableRef}}()
     for j in keys(C_rjt)
@@ -514,23 +561,46 @@ function cluster_variables_and_constraints(model, diagram, z)
         end
     end
 
-    println("erkki")
     println("μ_breve: $μ_breve")
     println("")
     println(diagram.Names)
     println("")
     println(I_j)
+    println("diagram.X:")
+    println(X)
 
     # Add in the conditional probabilities and decision strategies
     for name in diagram.Names 
+        println("name:")
+        println(name)
         if !isa(Nodes[name], ValueNode) # In our structure, value nodes are not stochastic and the whole objective thing doesn't really work in this context
+            println(C_rjt[name])
+            println(I_j[name])
             I_j_mapping = [findfirst(isequal(node), C_rjt[name]) for node in I_j[name]] # Map the information set to the variables in the cluster
+            println(I_j_mapping)
             #println(I_j_mapping)
             for index in CartesianIndices(μ_breve[name])
-                println(μ_breve[name])
+                #println(μ_breve[name])
+                #println(index)
                 for s_j in 1:length(States[name])
+                    #println(length(μ[name]))
+                    #println(index)
+                    #println(μ[name][Tuple(index)...,s_j])
+                    #println(I_j_mapping)
+                    #println("s_j:")
+                    #println(s_j)
+                    #println([Tuple(index)[I_j_mapping]...,s_j])
+                    #println(X[name][Tuple(index)[I_j_mapping]...,s_j])
                     if isa(Nodes[name], ChanceNode)
                         # μ_{C_v} = p*μ_{\breve{C}_v}
+                        println(μ[name][Tuple(index)...,s_j])
+                        println(μ_breve[name][index])
+                        println("testiprinttaus:")
+                        println(X[name])
+                        #println(index)
+                        println(I_j_mapping)
+                        #println(s_j)
+                        println(X[name][Tuple(index)[I_j_mapping]...,s_j])
                         @constraint(model, μ[name][Tuple(index)...,s_j] == X[name][Tuple(index)[I_j_mapping]...,s_j]*μ_breve[name][index])
                         #println(μ[name][Tuple(index)...,s_j])
                         #println(X[name][Tuple(index)[I_j_mapping]...,s_j])

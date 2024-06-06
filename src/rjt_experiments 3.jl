@@ -71,18 +71,24 @@ z = DecisionVariables(model, diagram)
 
 model
 
+println("model:")
+println(model)
+
 
 optimize!(model)
 
-
+println("z: ")
+println(z)
 Z = DecisionStrategy(z)
+println(Z)
+println("Z: ")
 println(Z)
 S_probabilities = StateProbabilities(diagram, Z)
 U_distribution = UtilityDistribution(diagram, Z);
 
-#println(diagram)
-#println(Z)
-#println(S_probabilities)
+println(diagram)
+println(Z)
+println(S_probabilities)
 print_decision_strategy(diagram, Z, S_probabilities)
 
 print_utility_distribution(U_distribution)

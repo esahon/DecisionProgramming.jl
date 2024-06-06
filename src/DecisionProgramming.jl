@@ -55,7 +55,9 @@ export CompatiblePaths,
     UtilityDistribution,
     StateProbabilities,
     value_at_risk,
-    conditional_value_at_risk
+    conditional_value_at_risk,
+    cluster_variables_and_constraints,
+    ID_to_RJT
 
 export randomStrategy,
     singlePolicyUpdate

@@ -19,7 +19,10 @@ print_decision_strategy(diagram, Z, S_probabilities)
 """
 function print_decision_strategy(diagram::InfluenceDiagram, Z::DecisionStrategy, state_probabilities::StateProbabilities; show_incompatible_states::Bool = false)
     probs = state_probabilities.probs
-
+    #println("diagram.S2:")
+    #println(diagram.S)
+    #println("diagram.States:")
+    #println(diagram.States)
     for (d, I_d, Z_d) in zip(Z.D, Z.I_d, Z.Z_d)
         s_I = vec(collect(paths(diagram.S[I_d])))
         s_d = [Z_d(s) for s in s_I]
@@ -72,6 +75,8 @@ print_state_probabilities(S_probabilities, ["A"])
 ```
 """
 function print_state_probabilities(diagram::InfluenceDiagram, state_probabilities::StateProbabilities, nodes::Vector{Name}; prob_fmt="%f")
+    #println("diagram.Names:")
+    #println(diagram.Names)
     node_indices = [findfirst(j -> j==node, diagram.Names) for node in nodes]
     states_list = diagram.States[node_indices]
     state_sets = unique(states_list)

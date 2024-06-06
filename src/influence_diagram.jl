@@ -313,6 +313,12 @@ struct DefaultPathProbability <: AbstractPathProbability
 end
 
 function (P::DefaultPathProbability)(s::Path)
+    if s == (1, 1, 2, 1, 1, 1, 1, 2, 2, 1)
+        #println(s)
+        #println(P.C)
+        #println(P.I_c)
+        #println(P.X)
+    end
     prod(X(s[[I_c; c]]) for (c, I_c, X) in zip(P.C, P.I_c, P.X))
 end
 
@@ -768,7 +774,13 @@ function UtilityMatrix(diagram::InfluenceDiagram, node::Name)
         push!(indices, states)
     end
     matrix = Array{Utility}(fill(Inf, diagram.S[I_v]...))
-
+    #println("UtilityMatrix:")
+    #println(names)
+    #println(indices)
+    #println(matrix)
+    #println(typeof(names))
+    #println(typeof(indices))
+    #println(typeof(matrix))
     return UtilityMatrix(names, indices, matrix)
 end
 
@@ -819,6 +831,11 @@ function add_utilities!(diagram::InfluenceDiagram, node::Name, utilities::Abstra
     if any(u ==Inf for u in utilities)
         throw(DomainError("Utility values should be less than infinity."))
     end
+
+    #println("diagram.S:")
+    #println(diagram.S)
+    #println("diagram.I_j:")
+    #println(diagram.I_j)
 
     if size(utilities) == Tuple((diagram.S[j] for j in diagram.I_j[v]))
         if isa(utilities, UtilityMatrix)
@@ -1001,7 +1018,13 @@ function generate_diagram!(diagram::InfluenceDiagram;
 
     # Declare P and U if defaults are used
     if default_probability
+        #println("")
+        #println("diagram.I_j[diagram.C]:")
+        #println(diagram.C)
+        #println(diagram.I_j[diagram.C])
         diagram.P = DefaultPathProbability(diagram.C, diagram.I_j[diagram.C], diagram.X)
+        #println("diagram.P:")
+        #println(diagram.P)
     end
     if default_utility
         diagram.U = DefaultPathUtility(diagram.I_j[diagram.V], diagram.Y)

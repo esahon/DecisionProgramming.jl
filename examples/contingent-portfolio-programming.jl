@@ -1,5 +1,5 @@
 using Logging, Random
-using JuMP, Gurobi
+using JuMP, HiGHS
 using DecisionProgramming
 
 Random.seed!(42)
@@ -110,11 +110,17 @@ application_value = @expression(model, [i=1:n_DP, j=1:n_CT, k=1:n_DA, l=1:n_CM],
 
 
 @info("Starting the optimization process.")
+"""
 optimizer = optimizer_with_attributes(
     () -> Gurobi.Optimizer(Gurobi.Env()),
     "IntFeasTol"      => 1e-9,
     "LazyConstraints" => 1,
 )
+"""
+optimizer = optimizer_with_attributes(
+    () -> HiGHS.Optimizer()
+)
+
 set_optimizer(model, optimizer)
 optimize!(model)
 

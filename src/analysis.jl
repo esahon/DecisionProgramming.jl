@@ -216,6 +216,11 @@ StateProbabilities(diagram, Z)
 ```
 """
 function StateProbabilities(diagram::InfluenceDiagram, Z::DecisionStrategy)
+    #println(diagram)
+    #println(Z)
+    #println("diagram.S:")
+    #println(diagram.S)
+
     probs = Dict(i => zeros(diagram.S[i]) for i in 1:length(diagram.S))
     for s in CompatiblePaths(diagram, Z), i in 1:length(diagram.S)
         probs[i][s[i]] += diagram.P(s)
